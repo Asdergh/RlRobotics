@@ -28,10 +28,15 @@ class SimpleNet(Module):
         self,
         n_observations: int,
         n_actions: int,
-        hiden_features: int = 128
+        hiden_features: int = 128,
+        in_set: tuple[int] = (-1, 1),
+        out_set: tuple[int] = (-0.4, 0.4)
     ) -> None:
         
         super().__init__()
+        self._in_set_ = in_set
+        self._out_set_ = out_set
+        self._scale_coeff_ = (max(out_set) - min(out_set)) / (max(in_set) - min(in_set))
         self._net_ = Sequential(
             Linear(in_features=n_observations, out_features=hiden_features),
             Tanh(),
@@ -45,7 +50,9 @@ class SimpleNet(Module):
         )
     
     def __call__(self, inputs: th.Tensor) -> th.Tensor:
-        return self._net_(inputs)
+
+        inputs = (inputs - inputs.mean()) / inputs.std()
+        return (self._scale_coeff_ * (self._net_(inputs) - min(self._in_set_))) + min(self._out_set_)
 
 
 class SimpleTrainer:
@@ -56,7 +63,7 @@ class SimpleTrainer:
         model: Module,
         optim: Optimizer,
         env: gym.Env,
-        discont_coeff: float = 12.12,
+        discont_coeff: float = 0.12,
         save_scene: bool = True
     ) -> None:
         
@@ -95,7 +102,7 @@ class SimpleTrainer:
         action = env.action_space.sample()
         for _ in tqdm.tqdm(
             range(steps),
-            desc="Trajectory Generation",
+            desc=f"Epizode: {epizode}, Trajectory Generation",
             colour="green",
             ascii=":>"
         ):
@@ -114,7 +121,7 @@ class SimpleTrainer:
             epizode.Rewards.append(reward)
             epizode.Frames.append(th.Tensor(env.render().copy()))
         
-        ret = th.Tensor(epizode.Rewards).sum() * self.dis_coeff
+        ret = th.Tensor([rew * (self.dis_coeff ** t) for (t, rew) in enumerate(epizode.Rewards)]).sum()
         loss = th.stack([
             log_action.unsqueeze(dim=0) for log_action in epizode.LogMeanActions
         ], dim=0).sum() * ret
@@ -174,7 +181,9 @@ class SimpleTrainer:
             
 
             
-        
+
+
+
         
 env = gym.make(
     'Humanoid-v5', 
@@ -193,7 +202,8 @@ trainer = SimpleTrainer(
     model=model,
     optim=optim,
     env=env,
-    target_path="C:\\Users\\1\\Desktop\\RLtarget"
+    target_path="C:\\Users\\1\\Desktop\\RLtarget",
+    discont_coeff=0.89
 )
 trainer.train(
     epizodes=100,
