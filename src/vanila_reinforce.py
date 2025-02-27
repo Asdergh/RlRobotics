@@ -17,7 +17,7 @@ from torch.nn import (
     Dropout
 )
 from collections import namedtuple
-from torchvision.io import write_video
+from envs.cassie.env import CassieEnv
 
 
 
@@ -28,7 +28,7 @@ class SimpleNet(Module):
         self,
         n_observations: int,
         n_actions: int,
-        hiden_features: int = 128,
+        hiden_features: int = 512,
         in_set: tuple[int] = (-1, 1),
         out_set: tuple[int] = (-0.4, 0.4)
     ) -> None:
@@ -62,9 +62,8 @@ class SimpleTrainer:
         target_path: str,
         model: Module,
         optim: Optimizer,
-        env: gym.Env,
+        env: CassieEnv,
         discont_coeff: float = 0.12,
-        save_scene: bool = True
     ) -> None:
         
         self.dis_coeff = discont_coeff
@@ -72,11 +71,9 @@ class SimpleTrainer:
             "LogMeanActions",
             "Observations",
             "Rewards",
-            "Frames"
         ])
         
         self.losses = []
-        self._save_scene_ = save_scene
         self.target_path = target_path
         self._gen_folder_ = os.path.join(
             self.target_path,
@@ -89,37 +86,27 @@ class SimpleTrainer:
         self.model = model
         self.optim = optim
         self.env = env
-        self.env.reset()
+        # self.env.reset()
     
 
-    def _train_on_epizode_(self, epizode: int, steps: int) -> tuple[
-        float,
-        namedtuple
-    ]:
+    def _train_on_epizode_(self, ep_idx: int) -> tuple[float, namedtuple]:
 
         
-        epizode = self.epizode_tup([], [], [], [])
-        action = env.action_space.sample()
-        for _ in tqdm.tqdm(
-            range(steps),
-            desc=f"Epizode: {epizode}, Trajectory Generation",
-            colour="green",
-            ascii=":>"
-        ):
+        epizode = self.epizode_tup([], [], [])
+        action = np.zeros(self.env.data.ctrl.shape[0])
+        epizode_end = False
+        while not epizode_end:
 
             if not isinstance(action, np.ndarray):
                 action = action.detach().numpy()
 
-            observations, reward, terminate = self.env.step(action)[:3]
-            if terminate:
-                pass
-
-            action = self.model(th.Tensor(observations.copy()))
-
+            observations, reward, terminate = self.env.step(action)
+            action = self.model(observations)
             epizode.LogMeanActions.append(th.log(th.sum(action)))
             epizode.Observations.append(observations)
             epizode.Rewards.append(reward)
-            epizode.Frames.append(th.Tensor(env.render().copy()))
+
+            epizode_end = terminate
         
         ret = th.Tensor([rew * (self.dis_coeff ** t) for (t, rew) in enumerate(epizode.Rewards)]).sum()
         loss = th.stack([
@@ -130,72 +117,44 @@ class SimpleTrainer:
         loss.backward()
         self.optim.step()
 
+
         return (loss, epizode)
     
-    def train(self, epizodes: int, steps_per_epizode: int) -> namedtuple:
+    def train(self, epizodes: int) -> None:
         
-        for epizode in range(epizodes):
+        for epizode in tqdm.tqdm(
+            range(epizodes),
+            colour="green",
+            ascii=":>",
+            desc="Training"
+        ):
             
-            self.env.reset()
-            (loss, epizode_history) = self._train_on_epizode_(epizode=epizode, steps=steps_per_epizode)
-            if self._save_scene_:
-                
-                frames = th.cat([
-                    frame.unsqueeze(dim=0) for frame in epizode_history.Frames
-                ], dim=0)
-                path = os.path.join(
-                    self._gen_folder_,
-                    f"epizode_{epizode}"
-                )
-                if not os.path.exists(path):
-                    os.mkdir(path)
+            (loss, epizode_history) = self._train_on_epizode_(ep_idx=epizode)
 
-                scene_path = os.path.join(path, "scene.mp4")
-                rewards_path = os.path.join(path, "rewards.png")
-                
-                fig, axis = plt.subplots()
-                rews = np.asarray(epizode_history.Rewards)
-                axis.plot(rews, color="blue", linestyle="--")
-                axis.fill_between(
-                    np.linspace(0, rews.shape[-1], rews.shape[-1]), 
-                    rews - np.mean(rews),
-                    rews + np.mean(rews),
-                    color="red", alpha=0.76
-                )
-                fig.savefig(rewards_path)
-                del fig, axis
-
-                write_video(
-                    scene_path,
-                    video_array=frames,
-                    fps=30
-                )
-            
-            del epizode_history
             params_path = os.path.join(self.target_path, "params.pt")
             self.losses.append(loss)
+
             th.save(self.model.state_dict(), params_path)
+            self.env.reset()
         
-        return self.training_history
-            
-            
-
-            
-
-
-
+        th.save(
+            self.model.state_dict(),
+            "C:\\Users\\1\\Desktop\\PythonProjects\\RL_robotics\\models_weights\\vanila_reinforce.pt"
+        )
         
-env = gym.make(
-    'Humanoid-v5', 
-    ctrl_cost_weight=0.1,
-    render_mode="rgb_array",
-    terminate_when_unhealthy=True
-)
+        
 
-
+env = CassieEnv({
+    "render": True,
+    "linear_reward_weight": 1,
+    "memory_based": True,
+    "timestep": 0.003
+})
+print(env.data.qpos.shape)
+print(env.data.qvel.shape)
 model = SimpleNet(
-    n_observations=348,
-    n_actions=17
+    n_observations=(35 + 32),
+n_actions=10
 )
 optim = Adam(lr=0.01, params=model.parameters())
 trainer = SimpleTrainer(
@@ -203,10 +162,11 @@ trainer = SimpleTrainer(
     optim=optim,
     env=env,
     target_path="C:\\Users\\1\\Desktop\\RLtarget",
-    discont_coeff=0.89
+    discont_coeff=1.0
 )
-trainer.train(
-    epizodes=100,
-    steps_per_epizode=1000
-)
+trainer.train(epizodes=200)
+env.plot_rewards()
+
+for idx in range(199):
+    env.show_scene(idx)
 

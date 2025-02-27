@@ -6,5 +6,6 @@ test.*
 *.mp4
 *.pt
 MUJOCO_LOG.TXT
+models_weights
 __pycache__.*
 storage.*
