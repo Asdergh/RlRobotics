@@ -42,7 +42,7 @@ class MujocoEnv:
         _xml_ = os.path.join(
             self._root_,
             self.params["model_name"],
-            "model\\scene.xml"
+            "scene.xml"
         )
     
         self.model = MjModel.from_xml_path(_xml_)
@@ -75,7 +75,7 @@ class MujocoEnv:
             mujoco.mj_resetData(self.model, self.data)
 
         mujoco.mj_step(self.model, self.data)
-        self.renderer.update_scene(self.data, camera="track")
+        self.renderer.update_scene(self.data)
         target_after = self.data.qpos[0]
 
         reward = self._get_reward_(target_before, target_after)
@@ -116,6 +116,19 @@ class MujocoEnv:
     
 
 
+if __name__ == "__main__":
+
+    test_env = MujocoEnv({
+        "render": True,
+        "linear_reward_weight": 1,
+        "anguler_reward_weight": 1,
+        "memory_based": True,
+        "timestep": 0.003,
+        "model_name": "g1_robot"
+    })
+
+    print(test_env.data.qpos.shape, test_env.data.qvel.shape)
+    
 
     
     

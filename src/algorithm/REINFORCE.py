@@ -132,7 +132,7 @@ params = {
             "anguler_reward_weight": 1,
             "memory_based": True,
             "timestep": 0.003,
-            "model_name": "cassie"
+            "model_name": "g1_robot"
         }
     },
     "opt": {
@@ -157,8 +157,9 @@ params = {
 # })
 
 model = SimpleNet(
-    n_observations=(35 + 32),
-    n_actions=10
+    n_observations=(35 + 36),
+    n_actions=29,
+    hiden_features=256
 )
 alg = REINFORCE(net=model, params=params)
 alg.train()
