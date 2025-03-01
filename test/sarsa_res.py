@@ -93,6 +93,7 @@ class SARSA:
             loss, mean_reward = self._train_on_epizode_(epizode=epizode, steps=steps)
             losses.append(loss)
             rewards.append(mean_reward)
+            self._epsilon_ -= 0.4
         
         losses = np.asarray(losses)
         rewards = np.asarray(rewards)
@@ -148,7 +149,7 @@ class SARSA:
             
             else:
 
-                out = self.net(th.Tensor(observ_p).unsqeueze(dim=0))
+                out = self.net(th.Tensor(observ_p).unsqueeze(dim=0))
                 action = int(out.argmax().item())
             
             
@@ -169,19 +170,21 @@ class SARSA:
         target_labels = []
         for (ob_p, _, rew, ob_a, _) in trajectory:
 
-                ob_a = th.Tensor(ob_a).unsqueeze(dim=0)
-                ob_p = th.Tensor(ob_p).unsqueeze(dim=0)
-                tar_label = rew + (self._gamma_ * self.net(ob_a).max())
-                label = self.net(ob_p).max()
+            ob_a = th.Tensor(ob_a).unsqueeze(dim=0)
+            ob_p = th.Tensor(ob_p).unsqueeze(dim=0)
+            tar_label = rew + (self._gamma_ * self.net(ob_a).max())
+            target_labels.append(tar_label)
 
-                labels.append(label)
-                target_labels.append(tar_label)
+            #TODO correct SARSA alg.
         
+        self.opt.zero_grad()
         labels = th.Tensor(labels)
         target_labels = th.Tensor(target_labels)
-        loss = (labels - target_labels).mean()
+        loss = (labels - target_labels)
+        loss.backward()
+        self.opt.step()
         
-        return (loss, np.asarray([sample.reward for sample in trajectory]).mean())
+        return (loss.mean(), np.asarray([sample.reward for sample in trajectory]).mean())
     
 
 

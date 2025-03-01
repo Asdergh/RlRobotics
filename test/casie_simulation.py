@@ -4,6 +4,7 @@ import numpy as np
 import numpy as np
 import matplotlib.pyplot as plt
 from torchvision.io import write_video
+import cv2
 
 
 
@@ -43,7 +44,7 @@ frames = []
 # scene_option.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = True
 
 # grav_vector = np.array([0., 0., 1.])
-model = mujoco.MjModel.from_xml_path("C:\\Users\\1\\Desktop\\PythonProjects\\RL_robotics\\src\\envs\\cassie\\scene.xml")
+model = mujoco.MjModel.from_xml_path("C:\\Users\\1\\Desktop\\PythonProjects\\RL_robotics\\src\\algorithm\\mujoco_env\\cassie\\model\\scene.xml")
 data = mujoco.MjData(model)
 # mujoco.mj_resetDataKeyframe(model, data, 0) 
 # data.qpos[:6] = np.cos(np.random.normal(0.12, 0.12, 6))
@@ -53,12 +54,12 @@ with mujoco.Renderer(model, 480, 640) as renderer:
         
         # model.opt.gravity = grav_vector
         
-        data.ctrl[2] -= 0.23
-        data.qpos[0] += 0.001
+        # data.ctrl[2] -= 0.23
+        data.qpos[4] += 0.01
         # data.ctrl[0] += 0.23
         mujoco.mj_step(model, data)
         renderer.update_scene(data)
-        frame = th.Tensor(renderer.render()).unsqueeze(dim=0)
+        frame = renderer.render()
         frames.append(frame)
         # grav_vector += np.random.randint(-1, 1) * np.random.normal(0.12, 0.012, 3)
 
@@ -69,11 +70,12 @@ if len(frames) == 1:
 
 else:
 
-    write_video(
-        "test.mp4",
-        video_array=th.cat(frames, dim=0),
-        fps=300
-    )
+    for frame in frames:
+        cv2.imshow("robot_test_scene", frame)
+        if cv2.waitKey(1) == ord("q"):
+            break
+
+    
     
     
 # import mujoco
@@ -81,7 +83,7 @@ else:
 # from scipy.optimize import minimize
 
 # # Загрузка модели Cassie
-# model = mujoco.MjModel.from_xml_path("C:\\\\Users\\\\1\\\\Desktop\\\\PythonProjects\\\\RL_robotics\\\\test\\\\mujoco_tests\\\\scene.xml")
+# model = mujoco.MjModel.from_xml_path("C:\\\\\\\\Users\\\\\\\\1\\\\\\\\Desktop\\\\\\\\PythonProjects\\\\\\\\RL_robotics\\\\\\\\test\\\\\\\\mujoco_tests\\\\\\\\scene.xml")
 # data = mujoco.MjData(model)
 
 # # Параметры симуляции
